@@ -6,7 +6,7 @@
   "manifestVersion": 4,
   "host": {
     "app": "PS",
-    "minVersion": "23.3.0",
+    "minVersion": "23.2.0",
     "data" : {
       "apiVersion": 2,
       "loadEvent": "startup"
