@@ -389,21 +389,21 @@ export default {
 
       try {
         this.currentModelTitle = null;
-        this.models = (await axios.get(`${this.endpoint}/sdapi/v1/sd-models`)).data;
+        const axiosConfig = {transitional: {silentJSONParsing: false}, responseType: 'json'};
+        this.models = (await axios.get(`${this.endpoint}/sdapi/v1/sd-models`, axiosConfig)).data;
+        if (!this.models.length) throw new Error('Cannot get models');
       }
       catch (modelsError) {
         try {
           await axios.get(this.endpoint);
         }
         catch (endpointError) {
-          console.error('endpointError error', endpointError);
           await app.showAlert('Error: cannot connect to your server');
           this.loadingModelsStatus = '';
           return;
         }
 
-        console.error('/sd-models error', modelsError);
-        await app.showAlert('Error: cannot connect to your API');
+        await app.showAlert('Error: your server is live, but the plugin cannot connect to the API');
       }
 
       this.loadingModelsStatus = '';
@@ -480,7 +480,7 @@ export default {
 
       let resDataImages = res.data.images;
       if (this.currentMode === 'inpaint') {
-        resDataImages = await this.handleInpaintGeneratedImages(resDataImages);
+        resDataImages = await this.handleInpaintGeneratedImages(resDataImages, data.mask);
       }
       this.generatedImages = [...this.generatedImages, ...resDataImages];
 
@@ -495,7 +495,7 @@ export default {
       this.isGenerating = false;
     },
 
-    async handleInpaintGeneratedImages(resDataImages) {
+    async handleInpaintGeneratedImages(resDataImages, debugMask) {
       const generatedImages = [];
 
       // TODO: Rewrite to Promises without await
@@ -503,16 +503,46 @@ export default {
         // eslint-disable-next-line no-await-in-loop
         const imageJimpObject = await Jimp.read(Buffer.from(image, 'base64'));
 
-        imageJimpObject.crop(
-          this.inpaintOriginalPosition.leftOffset,
-          this.inpaintOriginalPosition.topOffset,
-          this.inpaintOriginalPosition.width,
-          this.inpaintOriginalPosition.height,
-        );
+        try {
+          imageJimpObject.crop(
+            this.inpaintOriginalPosition.leftOffset,
+            this.inpaintOriginalPosition.topOffset,
+            this.inpaintOriginalPosition.width,
+            this.inpaintOriginalPosition.height,
+          );
+        }
+        catch (error) {
+          // DEBUG ERROR: x and y must be numbers (PHOTOSHOP-PLUGIN-1X)
+          Sentry.configureScope((scope) => {
+            scope.addAttachment({filename: 'generated_image.png', data: new Uint8Array(Buffer.from(image, 'base64')), contentType: 'image/png'});
+
+            const debugMaskData = new Uint8Array(Buffer.from(debugMask.replace(/^data:image\/\w+;base64,/, ''), 'base64'));
+            scope.addAttachment({filename: 'mask.png', data: debugMaskData, contentType: 'image/png'});
+          });
+
+          Sentry.setContext('handleInpaintGeneratedImages', {
+            inpaintOriginalPosition: this.inpaintOriginalPosition,
+            inpaintOriginalPositionTypes: {
+              leftOffset: typeof this.inpaintOriginalPosition.leftOffset,
+              topOffset: typeof this.inpaintOriginalPosition.topOffset,
+              width: typeof this.inpaintOriginalPosition.width,
+              height: typeof this.inpaintOriginalPosition.height,
+            },
+
+            imageJimpObject,
+            imageJimpObjectBitmap: imageJimpObject?.bitmap,
+          });
+
+          throw error; // rethrow
+        }
 
         // eslint-disable-next-line no-await-in-loop
         const croppedImageBase64 = await imageJimpObject.getBase64Async(Jimp.MIME_PNG);
         generatedImages.push(croppedImageBase64.replace(/^data:image\/\w+;base64,/, ''));
+
+        Sentry.configureScope((scope) => {
+          scope.clearAttachments();
+        });
       }
 
       return generatedImages;
@@ -553,7 +583,20 @@ export default {
       // DEBUG ERROR: Cannot read properties of null (reading 'resolution') (PHOTOSHOP-PLUGIN-E)
       if (!app.activeDocument?.resolution) {
         Sentry.captureException(new Error('chooseImage: cannot get resolution'), {
-          activeDocument: app.activeDocument,
+          contexts: {
+            activeDocumentObject: app.activeDocument,
+            documentProperties: {
+              id: app.activeDocument?.id,
+              cloudDocument: app.activeDocument?.cloudDocument,
+              height: app.activeDocument?.height,
+              width: app.activeDocument?.width,
+              name: app.activeDocument?.name,
+              resolution: app.activeDocument?.resolution,
+              saved: app.activeDocument?.saved,
+              typename: app.activeDocument?.typename,
+              layers: app.activeDocument?.layers.length,
+            },
+          },
         });
       }
 
