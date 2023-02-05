@@ -56,6 +56,22 @@
         </sp-textarea>
       </div>
 
+      <div v-if="styles.length" class="form__collapsed-section form__collapsed-section--styles">
+        <sp-heading size="XS" @click="toggleCollapsedSection('styles')">
+          <span>{{ showCollapsedSection.styles ? '▼' : '▶' }}</span>
+          Styles
+        </sp-heading>
+
+        <div v-if="showCollapsedSection.styles">
+          <sp-checkbox
+            v-for="style in styles" :key="style.name" :checked="style.checked"
+            @input="handleStyleCheckbox($event, style.name)"
+          >
+            <span>{{ style.name }}</span>
+          </sp-checkbox>
+        </div>
+      </div>
+
       <div class="form__inline-field">
         <sp-textfield v-model-custom-element="seed" type="text" placeholder="(Optional)">
           <sp-label slot="label">Seed</sp-label>
@@ -133,19 +149,28 @@
         </sp-label>
       </sp-slider>
 
-      <div class="form__advanced-settings">
-        <sp-heading size="XS" @click="toggleAdvancedSettings">
-          <span>{{ showAdvancedSettings ? '▼' : '▶' }}</span>
+      <div class="form__collapsed-section">
+        <sp-heading size="XS" @click="toggleCollapsedSection('advancedSettings')">
+          <span>{{ showCollapsedSection.advancedSettings ? '▼' : '▶' }}</span>
           Advanced Settings
         </sp-heading>
 
-        <div v-if="showAdvancedSettings">
+        <div v-if="showCollapsedSection.advancedSettings">
           <sp-slider v-model-custom-element="imagesNumber" min="1" max="8" show-value="false">
             <sp-label slot="label" class="label">
               Number of images
               <sp-label class="value">{{ imagesNumber }}</sp-label>
             </sp-label>
           </sp-slider>
+
+          <div class="form__save-images-option">
+            <sp-checkbox :checked="isSaveImagesLocally" @input="toggleIsSaveImagesLocally">
+              Save generated images locally
+            </sp-checkbox>
+            <sp-link href="#" @click.prevent="openFolderWithGeneratedImages">
+              (open folder)
+            </sp-link>
+          </div>
         </div>
       </div>
 
@@ -193,7 +218,7 @@
 </template>
 
 <script>
-import {storage} from 'uxp';
+import {storage, shell} from 'uxp';
 import {action, core, app} from 'photoshop';
 
 import * as Sentry from '@sentry/vue';
@@ -221,6 +246,7 @@ export default {
       cfgScale: 7,
       denoisingStrength: 75,
       imagesNumber: 4,
+      styles: [],
 
       generatedImages: [],
       currentGeneratedImageIndex: 0,
@@ -231,6 +257,7 @@ export default {
       generatedImagePosition: {left: null, top: null},
       generatedImageSize: {width: null, height: null},
       tempFolder: null,
+      dataFolder: null,
       progress: 0,
       isMouseoverGenerateButton: false,
 
@@ -242,13 +269,18 @@ export default {
       currentModelTitle: null,
       loadingModelsStatus: '',
       textareaInputDebounceTimer: null,
-      showAdvancedSettings: false,
+
+      showCollapsedSection: {advancedSettings: false, styles: false},
+      isSaveImagesLocally: false,
     };
   },
 
   computed: {
     getDefaultModelTitle() {
       return 'default (current webui value)';
+    },
+    getCheckedStyles() {
+      return this.styles.filter((x) => x.checked === true).map((x) => x.name);
     },
     getSizeForGeneratingImage() {
       // https://github.com/AUTOMATIC1111/stable-diffusion-webui/issues/4094
@@ -299,8 +331,9 @@ export default {
     this.currentSampler = storage.localStorage.getItem('currentSampler') || this.currentSampler;
     this.imagesNumber = storage.localStorage.getItem('imagesNumber') || this.imagesNumber;
     this.currentMode = storage.localStorage.getItem('currentMode') || this.currentMode;
+    this.isSaveImagesLocally = storage.localStorage.getItem('isSaveImagesLocally') || this.isSaveImagesLocally;
 
-    this.getTempFolder();
+    this.getTempAndDataFolders();
 
     this.$root.$on('copyPrompt', async (prompt, width, height, seed, guidance) => {
       this.prompt = '';
@@ -319,8 +352,22 @@ export default {
   },
 
   methods: {
-    toggleAdvancedSettings() {
-      this.showAdvancedSettings = !this.showAdvancedSettings;
+    handleStyleCheckbox(event, styleName) {
+      const styleIndex = this.styles.findIndex((x) => x.name === styleName);
+      this.$set(this.styles[styleIndex], 'checked', event.target.checked);
+    },
+
+    toggleCollapsedSection(section) {
+      this.showCollapsedSection[section] = !this.showCollapsedSection[section];
+    },
+
+    openFolderWithGeneratedImages() {
+      shell.openPath(this.dataFolder.nativePath);
+    },
+
+    toggleIsSaveImagesLocally(event) {
+      this.isSaveImagesLocally = event.target.checked;
+      storage.localStorage.setItem('isSaveImagesLocally', this.isSaveImagesLocally);
     },
 
     handleTextareaInput(event, skipDebounceTimer) {
@@ -392,6 +439,8 @@ export default {
         const axiosConfig = {transitional: {silentJSONParsing: false}, responseType: 'json'};
         this.models = (await axios.get(`${this.endpoint}/sdapi/v1/sd-models`, axiosConfig)).data;
         if (!this.models.length) throw new Error('Cannot get models');
+
+        this.styles = (await axios.get(`${this.endpoint}/sdapi/v1/prompt-styles`, axiosConfig)).data;
       }
       catch (modelsError) {
         try {
@@ -450,8 +499,9 @@ export default {
       this.seed = String(this.currentSeedList[this.currentGeneratedImageIndex]);
     },
 
-    async getTempFolder() {
+    async getTempAndDataFolders() {
       this.tempFolder = await storage.localFileSystem.getTemporaryFolder();
+      this.dataFolder = await storage.localFileSystem.getDataFolder();
     },
 
     async sendData(data, apiMethod) {
@@ -482,6 +532,11 @@ export default {
       if (this.currentMode === 'inpaint') {
         resDataImages = await this.handleInpaintGeneratedImages(resDataImages, data.mask);
       }
+
+      if (this.isSaveImagesLocally) {
+        await this.saveGeneratedImagesLocally(resDataImages, JSON.parse(res.data.info).all_seeds);
+      }
+
       this.generatedImages = [...this.generatedImages, ...resDataImages];
 
       const isGeneratingMoreImages = this.currentSeedList.length > 0;
@@ -493,6 +548,18 @@ export default {
 
       this.currentSeedList = [...this.currentSeedList, ...JSON.parse(res.data.info).all_seeds];
       this.isGenerating = false;
+    },
+
+    async saveGeneratedImagesLocally(resDataImages, seedList) {
+      const filesNumber = (await this.dataFolder.getEntries()).length;
+      for (const [index, imgUrl] of resDataImages.entries()) {
+        const imgBase64 = imgUrl.replace(/^data:image\/\w+;base64,/, '');
+        const img = Buffer.from(imgBase64, 'base64');
+        const filename = `${filesNumber + index}-${seedList[index]}-${this.prompt.slice(0, 128)}.png`;
+
+        const imageFile = await this.dataFolder.createFile(filename, {overwrite: true}); // eslint-disable-line no-await-in-loop
+        await imageFile.write(img, {format: storage.formats.binary}); // eslint-disable-line no-await-in-loop
+      }
     },
 
     async handleInpaintGeneratedImages(resDataImages, debugMask) {
@@ -774,7 +841,7 @@ export default {
       border-radius: 0px;
   }
 
-  .form__advanced-settings {
+  .form__collapsed-section {
     & > sp-heading {
       cursor: pointer;
 
@@ -788,6 +855,21 @@ export default {
     & > div {
       width: 100%;
     }
+  }
+
+  .form__collapsed-section--styles {
+    sp-heading {
+      margin: 0 0 10px;
+    }
+
+    sp-checkbox {
+      margin-right: 20px;
+    }
+  }
+
+  .form__save-images-option {
+    display: flex;
+    align-items: center;
   }
 
 </style>
