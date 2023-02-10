@@ -152,11 +152,11 @@
       <div v-show="currentMode !== 'txt2img'" class="form__collapsed-section">
         <sp-heading v-show="currentMode === 'img2img'" size="XS" @click="toggleCollapsedSection('inpaintAdvancedSettings')">
           <span>{{ showCollapsedSection.inpaintAdvancedSettings ? '▼' : '▶' }}</span>
-          Img2img advanced Settings
+          Img2img Advanced Settings
         </sp-heading>
         <sp-heading v-show="currentMode === 'inpaint'" size="XS" @click="toggleCollapsedSection('inpaintAdvancedSettings')">
           <span>{{ showCollapsedSection.inpaintAdvancedSettings ? '▼' : '▶' }}</span>
-          Inpaint advanced Settings
+          Inpaint Advanced Settings
         </sp-heading>
 
         <div v-if="showCollapsedSection.inpaintAdvancedSettings">
