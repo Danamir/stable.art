@@ -149,6 +149,13 @@
         </sp-label>
       </sp-slider>
 
+      <sp-slider v-show="currentMode == 'inpaint'" v-model-custom-element="inpaintSuperSampling" min="10" max="40" show-value="false">
+        <sp-label slot="label" class="label">
+          Inpaint supersampling
+          <sp-label class="value">{{ inpaintSuperSampling / 10 }}</sp-label>
+        </sp-label>
+      </sp-slider>
+
       <div class="form__collapsed-section">
         <sp-heading size="XS" @click="toggleCollapsedSection('advancedSettings')">
           <span>{{ showCollapsedSection.advancedSettings ? '▼' : '▶' }}</span>
@@ -243,6 +250,7 @@ export default {
       steps: 20,
       cfgScale: 7,
       denoisingStrength: 75,
+      inpaintSuperSampling: 10,
       imagesNumber: 4,
       styles: [],
 
@@ -288,6 +296,11 @@ export default {
       if (!width || !height) {
         width = 512;
         height = 512;
+      }
+
+      if (this.currentMode === 'inpaint' && this.inpaintSuperSampling !== 10) {
+        width = Math.round(width * (this.inpaintSuperSampling / 10));
+        height = Math.round(height * (this.inpaintSuperSampling / 10));
       }
 
       if (width !== height || this.currentMode !== 'txt2img') {
