@@ -149,7 +149,7 @@
         </sp-label>
       </sp-slider>
 
-      <div v-show="currentMode !== 'txt2img'" class="form__collapsed-section">
+      <div v-show="currentMode === 'inpaint'" class="form__collapsed-section">
         <sp-heading v-show="currentMode === 'img2img'" size="XS" @click="toggleCollapsedSection('inpaintAdvancedSettings')">
           <span>{{ showCollapsedSection.inpaintAdvancedSettings ? '▼' : '▶' }}</span>
           Img2img Advanced Settings
@@ -160,10 +160,15 @@
         </sp-heading>
 
         <div v-if="showCollapsedSection.inpaintAdvancedSettings">
-          <sp-slider v-model-custom-element="inpaintSuperSampling" min="20" max="80" show-value="false">
+          <sp-slider
+            v-model-custom-element="inpaintDimension"
+            :min="Math.round((448 - inpaintDimensionStep) / inpaintDimensionStep)"
+            :max="Math.round(2560 / inpaintDimensionStep)"
+            show-value="false"
+          >
             <sp-label slot="label" class="label">
-              Supersampling
-              <sp-label class="value">{{ inpaintSuperSampling / 20 }}</sp-label>
+              Render dimension min.
+              <sp-label class="value">{{ inpaintDimension === (448 - inpaintDimensionStep) / inpaintDimensionStep ? 'auto' : Math.round(inpaintDimension * inpaintDimensionStep) }}</sp-label>
             </sp-label>
           </sp-slider>
         </div>
@@ -267,7 +272,8 @@ export default {
       steps: 20,
       cfgScale: 7,
       denoisingStrength: 75,
-      inpaintSuperSampling: 20,
+      inpaintDimensionStep: 32,
+      inpaintDimension: 13, // auto = (448 - inpaintDimensionStep) / inpaintDimensionStep
       imagesNumber: 4,
       styles: [],
 
@@ -313,11 +319,6 @@ export default {
       if (!width || !height) {
         width = 512;
         height = 512;
-      }
-
-      if (this.currentMode !== 'txt2img' && this.inpaintSuperSampling !== 20) {
-        width = Math.round(width * (this.inpaintSuperSampling / 20));
-        height = Math.round(height * (this.inpaintSuperSampling / 20));
       }
 
       if (width !== height || this.currentMode !== 'txt2img') {
