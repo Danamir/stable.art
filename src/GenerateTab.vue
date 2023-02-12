@@ -149,31 +149,6 @@
         </sp-label>
       </sp-slider>
 
-      <div v-show="currentMode === 'inpaint'" class="form__collapsed-section">
-        <sp-heading v-show="currentMode === 'img2img'" size="XS" @click="toggleCollapsedSection('inpaintAdvancedSettings')">
-          <span>{{ showCollapsedSection.inpaintAdvancedSettings ? '▼' : '▶' }}</span>
-          Img2img Advanced Settings
-        </sp-heading>
-        <sp-heading v-show="currentMode === 'inpaint'" size="XS" @click="toggleCollapsedSection('inpaintAdvancedSettings')">
-          <span>{{ showCollapsedSection.inpaintAdvancedSettings ? '▼' : '▶' }}</span>
-          Inpaint Advanced Settings
-        </sp-heading>
-
-        <div v-if="showCollapsedSection.inpaintAdvancedSettings">
-          <sp-slider
-            v-model-custom-element="inpaintDimension"
-            :min="Math.round((448 - inpaintDimensionStep) / inpaintDimensionStep)"
-            :max="Math.round(2560 / inpaintDimensionStep)"
-            show-value="false"
-          >
-            <sp-label slot="label" class="label">
-              Render dimension min.
-              <sp-label class="value">{{ inpaintDimension === (448 - inpaintDimensionStep) / inpaintDimensionStep ? 'auto' : Math.round(inpaintDimension * inpaintDimensionStep) }}</sp-label>
-            </sp-label>
-          </sp-slider>
-        </div>
-      </div>
-
       <div class="form__collapsed-section">
         <sp-heading size="XS" @click="toggleCollapsedSection('advancedSettings')">
           <span>{{ showCollapsedSection.advancedSettings ? '▼' : '▶' }}</span>
@@ -185,6 +160,13 @@
             <sp-label slot="label" class="label">
               Number of images
               <sp-label class="value">{{ imagesNumber }}</sp-label>
+            </sp-label>
+          </sp-slider>
+
+          <sp-slider v-model-custom-element="inpaintDimension" min="480" max="2560" show-value="false" step="32">
+            <sp-label slot="label" class="label">
+              Render dimension min.
+              <sp-label class="value">{{ inpaintDimension === 480 ? 'auto' : inpaintDimension }}</sp-label>
             </sp-label>
           </sp-slider>
 
@@ -272,8 +254,7 @@ export default {
       steps: 20,
       cfgScale: 7,
       denoisingStrength: 75,
-      inpaintDimensionStep: 32,
-      inpaintDimension: 13, // auto = (448 - inpaintDimensionStep) / inpaintDimensionStep
+      inpaintDimension: 480, // auto
       imagesNumber: 4,
       styles: [],
 
@@ -319,6 +300,22 @@ export default {
       if (!width || !height) {
         width = 512;
         height = 512;
+      }
+
+      if (this.inpaintDimension > 480) { // 480 = auto value
+        const biggestValue = width > height ? width : height;
+        const ratio = this.inpaintDimension / biggestValue;
+
+        if (biggestValue < this.inpaintDimension) {
+          if (width > height) {
+            height = Math.round(height * ratio);
+            width = this.inpaintDimension;
+          }
+          else {
+            width = Math.round(width * ratio);
+            height = this.inpaintDimension;
+          }
+        }
       }
 
       if (width !== height || this.currentMode !== 'txt2img') {
