@@ -1,7 +1,7 @@
 @echo off
-rem start npm run serve
+start npm run serve
 
-cd ..
+rem cd ..
 rem start cmd.exe /K webui-custom-api.bat
-webui-custom-api.bat
+rem webui-custom-api.bat
 
