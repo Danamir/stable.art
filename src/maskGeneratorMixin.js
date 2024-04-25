@@ -150,6 +150,13 @@ export default {
       if (prepareGenerationHasError) return;
 
       if (this.currentMode === 'img2img' || this.currentMode === 'inpaint') {
+        let samplerName = this.currentSampler;
+        let schedulerValue = '';
+        if (samplerName.endsWith(' Karras')) {
+          samplerName = samplerName.replace(' Karras', '');
+          schedulerValue = 'Karras';
+        }
+
         const img2imgData = {
           init_images: [this.initImageData.currentLayerBase64],
           resize_mode: 0,
@@ -182,7 +189,9 @@ export default {
           s_tmin: 0,
           s_noise: 1,
           override_settings: {},
-          sampler_index: this.currentSampler,
+          // sampler_index: this.currentSampler,
+          sampler_name: samplerName,
+          scheduler: schedulerValue,
           include_init_images: false,
           alwayson_scripts: {},
         };
@@ -210,6 +219,13 @@ export default {
       }
 
       if (this.currentMode === 'txt2img') {
+        let samplerName = this.currentSampler;
+        let schedulerValue = '';
+        if (samplerName.endsWith(' Karras')) {
+          samplerName = samplerName.replace(' Karras', '');
+          schedulerValue = 'Karras';
+        }
+
         const txt2imgData = {
           enable_hr: false,
           denoising_strength: 0,
@@ -237,7 +253,9 @@ export default {
           s_tmin: 0,
           s_noise: 1,
           override_settings: {},
-          sampler_index: this.currentSampler,
+          // sampler_index: this.currentSampler,
+          sampler_name: samplerName,
+          scheduler: schedulerValue,
         };
 
         await this.sendData(txt2imgData, 'txt2img');
